@@ -3,7 +3,7 @@
 # gaim-encryption configure script, thanks guys ;)
 #
 
-AC_INIT([pidgin-tabby], [0.1], [nothing])
+AC_INIT([pidgin-wishmaster], [0.1], [nothing])
 AC_CANONICAL_SYSTEM
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_MACRO_DIR([m4])
@@ -116,5 +116,5 @@ echo libpurple API..................: $LIBPURPLE_CFLAGS
 echo pidgin API.....................: $PIDGIN_CFLAGS
 echo;
 echo Type make to compile
-echo Thank you for using pidgin-tabby
+echo Thank you for using pidgin-wishmaster
 echo;
