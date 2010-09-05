@@ -32,13 +32,14 @@
 #include <debug.h>
 #include <util.h>
 #include <privacy.h>
+#include <gtkimhtml.h>
 
 /* for pidgin_create_prpl_icon */
 #include <gtkutils.h>
 
 #include <string.h>
 
-#define PLUGIN_ID "pidgin-tabby"
+#define PLUGIN_ID "pidgin-wishmaster"
 
 typedef struct _PidginAutocomplete PidginAutocomplete;
 struct _PidginAutocomplete
@@ -237,12 +238,74 @@ chat_buddy_left(PurpleConversation *conv, const char *name,
 		pidgin_autocomplete_remove_user(ac, name);
 }
 
+static void
+insert_nick_do(PidginConversation *gtkconv, const char *who)
+{
+	char *tmp = g_strdup_printf("%s: ", who);
+	gtk_text_buffer_insert_at_cursor(gtkconv->entry_buffer, tmp, -1);
+	g_free(tmp);
+	gtk_widget_grab_focus(gtkconv->entry);
+}
+
+static gint
+button_press(GtkWidget *widget, GdkEventButton *event,
+				PidginConversation *gtkconv)
+{
+	PurpleConversation *conv = gtkconv->active_conv;
+	PidginChatPane *gtkchat;
+	PurpleConnection *gc;
+	PurpleAccount *account;
+	GtkTreePath *path;
+	GtkTreeIter iter;
+	GtkTreeModel *model;
+	GtkTreeViewColumn *column;
+	gchar *who;
+	int x, y;
+
+	gtkchat = gtkconv->u.chat;
+	account = purple_conversation_get_account(conv);
+	gc      = account->gc;
+
+	model = gtk_tree_view_get_model(GTK_TREE_VIEW(gtkchat->list));
+
+	gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(gtkchat->list),
+								  event->x, event->y, &path, &column, &x, &y);
+
+	if (path == NULL)
+		return FALSE;
+
+	gtk_tree_selection_select_path(GTK_TREE_SELECTION(
+			gtk_tree_view_get_selection(GTK_TREE_VIEW(gtkchat->list))), path);
+	gtk_tree_view_set_cursor(GTK_TREE_VIEW(gtkchat->list),
+							 path, NULL, FALSE);
+	gtk_widget_grab_focus(GTK_WIDGET(gtkchat->list));
+
+	gtk_tree_model_get_iter(GTK_TREE_MODEL(model), &iter, path);
+	gtk_tree_model_get(GTK_TREE_MODEL(model), &iter, CHAT_USERS_NAME_COLUMN, &who, -1);
+
+	if (event->button == 1) {
+		insert_nick_do(gtkconv, who);
+		g_free(who);
+		gtk_tree_path_free(path);
+		return TRUE;
+	}
+
+	g_free(who);
+	gtk_tree_path_free(path);
+
+	return FALSE;
+}
+
 static PidginAutocomplete*
 conversation_attach(PurpleConversation *conv)
 {
 	if (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT && !conv->u.chat->left) {
+		PidginConversation *gtkconv = PIDGIN_CONVERSATION(conv);
+		PidginChatPane *gtkchat = gtkconv->u.chat;
 		PidginAutocomplete *ac = pidgin_autocomplete_new();
 		PURPLE_AUTOCOMPLETE_SET(conv, ac);
+		g_signal_connect(G_OBJECT(gtkchat->list), "button-release-event",
+						G_CALLBACK(button_press), gtkconv);
 		return ac;
 	}
 	return NULL;
@@ -269,6 +332,52 @@ chat_buddy_rename(PurpleConversation *conv, const char *old_name,
 		pidgin_autocomplete_update_user(ac, old_name, new_name);
 	if (old_rename)
 		old_rename(conv, old_name, new_name, new_alias);
+}
+
+static gboolean tag_hack(GtkTextTag *tag, GObject *imhtml,
+		GdkEvent *event, GtkTextIter *arg2, gpointer data)
+{
+	if (event->type == GDK_BUTTON_PRESS && ((GdkEventButton*)event)->button == 1) {
+		PurpleConversation *conv = data;
+		char *buddyname;
+
+		/* strlen("BUDDY " or "HILIT ") == 6 */
+		g_return_val_if_fail((tag->name != NULL)
+				&& (strlen(tag->name) > 6), FALSE);
+
+		buddyname = (tag->name) + 6;
+
+		insert_nick_do(PIDGIN_CONVERSATION(conv), buddyname);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+chat_hack(PurpleAccount *account, const char *who, char *displaying,
+						PurpleConversation *conv, PurpleMessageFlags flags)
+{
+	PidginConversation *gtkconv = PIDGIN_CONVERSATION(conv);
+	GtkTextTag *buddytag;
+	gchar *str;
+	gboolean highlight = (flags & PURPLE_MESSAGE_NICK);
+	GtkTextBuffer *buffer = GTK_IMHTML(gtkconv->imhtml)->text_buffer;
+
+	str = g_strdup_printf(highlight ? "HILIT %s" : "BUDDY %s", who);
+
+	buddytag = gtk_text_tag_table_lookup(
+			gtk_text_buffer_get_tag_table(buffer), str);
+
+	if (buddytag) {
+		if (!g_object_get_data(G_OBJECT(buddytag), "ntfy")) {
+			g_object_set_data(G_OBJECT(buddytag), "ntfy", "1");
+			g_signal_connect(G_OBJECT(buddytag), "event",
+					G_CALLBACK(tag_hack), conv);
+		}
+	}
+	g_free(str);
+	return FALSE;
 }
 
 static gboolean
@@ -309,6 +418,9 @@ plugin_load (PurplePlugin *plugin)
 						PURPLE_CALLBACK(chat_buddy_joined), NULL);
 	purple_signal_connect (conv_handle, "chat-buddy-left", plugin,
 						PURPLE_CALLBACK(chat_buddy_left), NULL);
+	purple_signal_connect(pidgin_conversations_get_handle(),
+						"displayed-chat-msg", plugin,
+						PURPLE_CALLBACK(chat_hack), NULL);
 
 	return TRUE;
 }
@@ -332,6 +444,9 @@ plugin_unload (PurplePlugin *plugin)
 							PURPLE_CALLBACK(chat_buddy_joined));
 	purple_signal_disconnect (conv_handle, "chat-buddy-left", plugin,
 							PURPLE_CALLBACK(chat_buddy_left));
+	purple_signal_disconnect(pidgin_conversations_get_handle(),
+							"displayed-chat-msg", plugin,
+							PURPLE_CALLBACK(chat_hack));
 
 	GList *convs;
 	for (convs = purple_get_conversations(); convs != NULL; convs = convs->next)
@@ -384,9 +499,9 @@ init_plugin (PurplePlugin *plugin)
 	bindtextdomain (PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset (PACKAGE, "UTF-8");
 #endif
-	info.name = _("A Tabby");
+	info.name = _("Wishmaster");
 	info.summary = _("Better nick autocomplete in MUC.");
-	info.description = _("Pidgin-tabby:\nAllows insert nicks in chat by clicking on them.");
+	info.description = _("Wishmaster:\nAllows insert nicks in chat by clicking on them.");
 
 	purple_prefs_add_none ("/plugins/gtk/tabby");
 	purple_prefs_add_bool ("/plugins/gtk/tabby/click_on_nick", TRUE);
