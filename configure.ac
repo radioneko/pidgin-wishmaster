@@ -32,15 +32,6 @@ AH_BOTTOM([
 ])
 
 #
-# Setup gettext
-#
-AC_PROG_INTLTOOL
-GETTEXT_PACKAGE=pidgin-tabby
-AC_SUBST(GETTEXT_PACKAGE)
-ALL_LINGUAS="ru"
-AM_GLIB_GNU_GETTEXT
-
-#
 # Look for the C compiler
 #
 CFLAGS_save="$CFLAGS"
@@ -108,20 +99,6 @@ AC_SUBST(PIDGIN_DATADIR)
 #
 want_plugins=yes
 AM_CONDITIONAL(PLUGINS, test "$want_plugins" = "yes")
-
-#
-# Version stuff
-#
-AC_CONFIG_COMMANDS_PRE([
-	if test -e VERSION; then
-		cp -p VERSION VERSION.ac-save
-	fi
-])
-
-AC_CONFIG_COMMANDS_POST([
-	cmp VERSION VERSION.ac-save || touch -r VERSION.ac-save VERSION
-	rm -f VERSION.ac-save
-])
 
 #
 # Finish up
