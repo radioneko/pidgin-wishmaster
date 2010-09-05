@@ -3,8 +3,8 @@ echo "*** Running autoheader"
 autoheader || exit 1
 echo "*** Running libtoolize"
 libtoolize
-echo "*** Running gettextize"
-gettextize
+#echo "*** Running gettextize"
+#gettextize
 echo "*** Running aclocal -I m4"
 aclocal -I m4 || exit 1
 echo "*** Running automake --add-missing --copy"

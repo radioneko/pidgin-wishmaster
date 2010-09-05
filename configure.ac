@@ -5,7 +5,8 @@
 
 AC_INIT([pidgin-tabby], [0.1], [nothing])
 AC_CANONICAL_SYSTEM
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADER(config.h)
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 
@@ -127,7 +128,6 @@ AC_CONFIG_COMMANDS_POST([
 #
 AC_OUTPUT([Makefile
 		   VERSION
-		   po/Makefile.in
 		   src/Makefile
 		  ])
 

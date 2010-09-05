@@ -6,5 +6,6 @@ EXTRA_DIST = \
 		README \
 		COPYING
 
-SUBDIRS = po src
+SUBDIRS = src
+ACLOCAL_AMFLAGS = -I m4
 
