@@ -3,7 +3,8 @@ EXTRA_DIST = \
 		ChangeLog \
 		NEWS \
 		README \
-		COPYING
+		COPYING \
+		misc
 
 SUBDIRS = src
 ACLOCAL_AMFLAGS = -I m4

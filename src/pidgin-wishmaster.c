@@ -1,6 +1,6 @@
 /*
- * Pidgin-libnotify - Provides a libnotify interface for Pidgin
- * Copyright (C) 2005-2007 Duarte Henriques
+ * Pidgin-wishmaster - unlocks fancy pidgin nick completion features
+ * Copyright (C) 2010 kawaii.neko
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
