@@ -104,7 +104,6 @@ AM_CONDITIONAL(PLUGINS, test "$want_plugins" = "yes")
 # Finish up
 #
 AC_OUTPUT([Makefile
-		   VERSION
 		   src/Makefile
 		  ])
 
@@ -113,8 +112,8 @@ echo Configuration complete
 echo;
 echo Debugging enabled..............: $enable_debug
 echo Deprecated API enabled.........: $enable_deprecated
-#echo libpurple API..................: $LIBPURPLE_CFLAGS
-#echo pidgin API.....................: $PIDGIN_CFLAGS
+echo libpurple API..................: $LIBPURPLE_CFLAGS
+echo pidgin API.....................: $PIDGIN_CFLAGS
 echo;
 echo Type make to compile
 echo Thank you for using pidgin-tabby
