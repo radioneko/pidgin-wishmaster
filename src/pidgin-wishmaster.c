@@ -41,6 +41,9 @@
 
 #define PLUGIN_ID "pidgin-wishmaster"
 
+#undef SMARTTAB
+
+#ifdef SMARTTAB
 typedef struct _PidginAutocomplete PidginAutocomplete;
 struct _PidginAutocomplete
 {
@@ -140,7 +143,7 @@ pidgin_autocomplete_update_user(PidginAutocomplete *ac, const char *old_name, co
 		entry->data = g_strdup(new_name);
 	}
 }
-
+#endif
 
 static PurplePluginPrefFrame *
 get_plugin_pref_frame (PurplePlugin *plugin)
@@ -158,46 +161,7 @@ get_plugin_pref_frame (PurplePlugin *plugin)
 	return frame;
 }
 
-/* do NOT g_free() the string returned by this function */
-static gchar *
-best_name (PurpleBuddy *buddy)
-{
-	if (buddy->alias) {
-		return buddy->alias;
-	} else if (buddy->server_alias) {
-		return buddy->server_alias;
-	} else {
-		return buddy->name;
-	}
-}
-
-/* you must g_free the returned string
- * num_chars is utf-8 characters */
-static gchar *
-truncate_escape_string (const gchar *str,
-						int num_chars)
-{
-	gchar *escaped_str;
-
-	if (g_utf8_strlen (str, num_chars*2+1) > num_chars) {
-		gchar *truncated_str;
-		gchar *str2;
-
-		/* allocate number of bytes and not number of utf-8 chars */
-		str2 = g_malloc ((num_chars-1) * 2 * sizeof(gchar));
-
-		g_utf8_strncpy (str2, str, num_chars-2);
-		truncated_str = g_strdup_printf ("%s..", str2);
-		escaped_str = g_markup_escape_text (truncated_str, strlen (truncated_str));
-		g_free (str2);
-		g_free (truncated_str);
-	} else {
-		escaped_str = g_markup_escape_text (str, strlen (str));
-	}
-
-	return escaped_str;
-}
-
+#ifdef SMARTTAB
 #define PURPLE_AUTOCOMPLETE_GET(conv) \
 	((PidginAutocomplete*)purple_conversation_get_data(conv, "tabby-autocomplete"))
 
@@ -237,6 +201,7 @@ chat_buddy_left(PurpleConversation *conv, const char *name,
 	if (ac)
 		pidgin_autocomplete_remove_user(ac, name);
 }
+#endif
 
 static void
 insert_nick_do(PidginConversation *gtkconv, const char *who)
@@ -296,29 +261,48 @@ button_press(GtkWidget *widget, GdkEventButton *event,
 	return FALSE;
 }
 
+#ifdef SMARTTAB
 static PidginAutocomplete*
+#else
+static void
+#endif
 conversation_attach(PurpleConversation *conv)
 {
 	if (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT && !conv->u.chat->left) {
 		PidginConversation *gtkconv = PIDGIN_CONVERSATION(conv);
 		PidginChatPane *gtkchat = gtkconv->u.chat;
+#ifdef SMARTTAB
 		PidginAutocomplete *ac = pidgin_autocomplete_new();
 		PURPLE_AUTOCOMPLETE_SET(conv, ac);
+#endif
 		g_signal_connect(G_OBJECT(gtkchat->list), "button-release-event",
 						G_CALLBACK(button_press), gtkconv);
+#ifdef SMARTTAB
 		return ac;
+#endif
 	}
+#ifdef SMARTTAB
 	return NULL;
+#endif
 }
 
 static void
 conversation_detach(PurpleConversation *conv)
 {
+#ifdef SMARTTAB
 	PidginAutocomplete *ac = PURPLE_AUTOCOMPLETE_GET(conv);
 	PURPLE_AUTOCOMPLETE_SET(conv, NULL);
 	pidgin_autocomplete_free(ac);
+#endif
+	if (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT && !conv->u.chat->left) {
+		PidginConversation *gtkconv = PIDGIN_CONVERSATION(conv);
+		PidginChatPane *gtkchat = gtkconv->u.chat;
+		g_signal_handlers_disconnect_by_func(G_OBJECT(gtkchat->list),
+						G_CALLBACK(button_press), gtkconv);
+	}
 }
 
+#ifdef SMARTTAB
 static void (*old_rename)(PurpleConversation *conv, const char *old_name,
 				 const char *new_name, const char *new_alias) = NULL;
 
@@ -333,6 +317,7 @@ chat_buddy_rename(PurpleConversation *conv, const char *old_name,
 	if (old_rename)
 		old_rename(conv, old_name, new_name, new_alias);
 }
+#endif
 
 static gboolean tag_hack(GtkTextTag *tag, GObject *imhtml,
 		GdkEvent *event, GtkTextIter *arg2, gpointer data)
@@ -354,7 +339,7 @@ static gboolean tag_hack(GtkTextTag *tag, GObject *imhtml,
 	return FALSE;
 }
 
-static gboolean
+static void
 chat_hack(PurpleAccount *account, const char *who, char *displaying,
 						PurpleConversation *conv, PurpleMessageFlags flags)
 {
@@ -377,23 +362,21 @@ chat_hack(PurpleAccount *account, const char *who, char *displaying,
 		}
 	}
 	g_free(str);
-	return FALSE;
 }
 
 static gboolean
 plugin_load (PurplePlugin *plugin)
 {
-	void *conv_handle, *blist_handle, *conn_handle;
+	void *conv_handle;
 
 	conv_handle = purple_conversations_get_handle ();
-	blist_handle = purple_blist_get_handle ();
-	conn_handle = purple_connections_get_handle();
 
 	/* Attach to all conversations */
 	GList *convs;
 	for (convs = purple_get_conversations(); convs != NULL; convs = convs->next) {
-		PidginAutocomplete *ac;
 		PurpleConversation *conv = (PurpleConversation*)convs->data;
+#ifdef SMARTTAB
+		PidginAutocomplete *ac;
 		if ((ac = conversation_attach(conv))) {
 			GList *u;
 			for (u = conv->u.chat->in_room; u != NULL; u = u->next) {
@@ -402,23 +385,30 @@ plugin_load (PurplePlugin *plugin)
 						(GCompareFunc)g_utf8_collate);
 			}
 		}
+#else
+		conversation_attach(conv);
+#endif
 	}
 
+#ifdef SMARTTAB
 	PurpleConversationUiOps *ops = pidgin_conversations_get_conv_ui_ops();
 	old_rename = ops->chat_rename_user;
 	ops->chat_rename_user = chat_buddy_rename;
+#endif
 
 	purple_signal_connect (conv_handle, "conversation-created", plugin,
 						PURPLE_CALLBACK(conversation_attach), NULL);
 	purple_signal_connect (conv_handle, "deleting-conversation", plugin,
 						PURPLE_CALLBACK(conversation_detach), NULL);
+#ifdef SMARTTAB
 	purple_signal_connect (conv_handle, "received-chat-msg", plugin,
 						PURPLE_CALLBACK(received_chat_msg_cb), NULL);
 	purple_signal_connect (conv_handle, "chat-buddy-joined", plugin,
 						PURPLE_CALLBACK(chat_buddy_joined), NULL);
 	purple_signal_connect (conv_handle, "chat-buddy-left", plugin,
 						PURPLE_CALLBACK(chat_buddy_left), NULL);
-	purple_signal_connect(pidgin_conversations_get_handle(),
+#endif
+	purple_signal_connect (pidgin_conversations_get_handle(),
 						"displayed-chat-msg", plugin,
 						PURPLE_CALLBACK(chat_hack), NULL);
 
@@ -428,23 +418,23 @@ plugin_load (PurplePlugin *plugin)
 static gboolean
 plugin_unload (PurplePlugin *plugin)
 {
-	void *conv_handle, *blist_handle, *conn_handle;
+	void *conv_handle;
 
 	conv_handle = purple_conversations_get_handle ();
-	blist_handle = purple_blist_get_handle ();
-	conn_handle = purple_connections_get_handle();
 
 	purple_signal_disconnect (conv_handle, "conversation-created", plugin,
 							PURPLE_CALLBACK(conversation_attach));
 	purple_signal_disconnect (conv_handle, "deleting-conversation", plugin,
 							PURPLE_CALLBACK(conversation_detach));
+#ifdef SMARTTAB
 	purple_signal_disconnect (conv_handle, "received-chat-msg", plugin,
 							PURPLE_CALLBACK(received_chat_msg_cb));
 	purple_signal_disconnect (conv_handle, "chat-buddy-joined", plugin,
 							PURPLE_CALLBACK(chat_buddy_joined));
 	purple_signal_disconnect (conv_handle, "chat-buddy-left", plugin,
 							PURPLE_CALLBACK(chat_buddy_left));
-	purple_signal_disconnect(pidgin_conversations_get_handle(),
+#endif
+	purple_signal_disconnect (pidgin_conversations_get_handle(),
 							"displayed-chat-msg", plugin,
 							PURPLE_CALLBACK(chat_hack));
 
@@ -452,15 +442,17 @@ plugin_unload (PurplePlugin *plugin)
 	for (convs = purple_get_conversations(); convs != NULL; convs = convs->next)
 		conversation_detach((PurpleConversation*)convs->data);
 
+#ifdef SMARTTAB
 	PurpleConversationUiOps *ops = pidgin_conversations_get_conv_ui_ops();
 	ops->chat_rename_user = old_rename;
 	old_rename = NULL;
+#endif
 
 	return TRUE;
 }
 
 static PurplePluginUiInfo prefs_info = {
-    get_plugin_pref_frame,
+    NULL, //get_plugin_pref_frame,
     0,						/* page num (Reserved) */
     NULL					/* frame (Reserved) */
 };
@@ -503,8 +495,8 @@ init_plugin (PurplePlugin *plugin)
 	info.summary = _("Better nick autocomplete in MUC.");
 	info.description = _("Wishmaster:\nAllows insert nicks in chat by clicking on them.");
 
-	purple_prefs_add_none ("/plugins/gtk/tabby");
-	purple_prefs_add_bool ("/plugins/gtk/tabby/click_on_nick", TRUE);
+	purple_prefs_add_none ("/plugins/gtk/wishmaster");
+	purple_prefs_add_bool ("/plugins/gtk/wishmaster/click_on_nick", TRUE);
 }
 
 PURPLE_INIT_PLUGIN(notify, init_plugin, info)
