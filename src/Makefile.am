@@ -1,16 +1,16 @@
 gddir = $(LIBPURPLE_LIBDIR)/purple-2
 
-pidgin_tabby_la_LDFLAGS = -module -avoid-version
+pidgin_wishmaster_la_LDFLAGS = -module -avoid-version
 
 if PLUGINS
 
-gd_LTLIBRARIES = pidgin-tabby.la
+gd_LTLIBRARIES = pidgin-wishmaster.la
 
-pidgin_tabby_la_SOURCES = \
-	pidgin-tabby.c \
+pidgin_wishmaster_la_SOURCES = \
+	pidgin-wishmaster.c \
 	gln_intl.h
 
-pidgin_tabby_la_LIBADD = $(DBUS_LIBS) $(GTK_LIBS)
+pidgin_wishmaster_la_LIBADD = $(DBUS_LIBS) $(GTK_LIBS)
 
 endif
 
