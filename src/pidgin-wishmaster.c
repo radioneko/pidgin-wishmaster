@@ -33,6 +33,7 @@
 #include <util.h>
 #include <privacy.h>
 #include <gtkimhtml.h>
+#include <gdk/gdkkeysyms.h>
 
 /* for pidgin_create_prpl_icon */
 #include <gtkutils.h>
@@ -203,13 +204,23 @@ chat_buddy_left(PurpleConversation *conv, const char *name,
 }
 #endif
 
-static void
+static gboolean
 insert_nick_do(PidginConversation *gtkconv, const char *who)
 {
-	char *tmp = g_strdup_printf("%s: ", who);
+	PurpleConversation *conv = gtkconv->active_conv;
+	char *tmp, *nick = purple_conversation_get_data(conv, "tabby-last");
+	if (who) {
+		g_free(nick);
+		nick = g_strdup(who);
+		purple_conversation_set_data(conv, "tabby-last", nick);
+	}
+	if (!nick)
+		return FALSE;
+	tmp = g_strdup_printf("%s: ", nick);
 	gtk_text_buffer_insert_at_cursor(gtkconv->entry_buffer, tmp, -1);
 	g_free(tmp);
 	gtk_widget_grab_focus(gtkconv->entry);
+	return TRUE;
 }
 
 static gint
@@ -261,6 +272,32 @@ button_press(GtkWidget *widget, GdkEventButton *event,
 	return FALSE;
 }
 
+static gboolean
+entry_key_press_cb(GtkWidget *entry, GdkEventKey *event, gpointer data)
+{
+	switch (event->keyval) {
+		case GDK_r:
+			if (event->state & GDK_CONTROL_MASK)
+				printf("C-r\n");
+			break;
+		case GDK_Tab:
+		case GDK_KP_Tab:
+		case GDK_ISO_Left_Tab: {
+			GtkTextIter start_buffer, cursor;
+			PidginConversation *gtkconv = (PidginConversation*)data;
+			gtk_text_buffer_get_start_iter(gtkconv->entry_buffer, &start_buffer);
+			gtk_text_buffer_get_iter_at_mark(gtkconv->entry_buffer, &cursor,
+					gtk_text_buffer_get_insert(gtkconv->entry_buffer));
+			/* we're at the start of entry */
+			if (!gtk_text_iter_compare(&cursor, &start_buffer)) {
+				return insert_nick_do(gtkconv, NULL);
+			}
+	   }
+	}
+	
+	return FALSE;
+}
+
 #ifdef SMARTTAB
 static PidginAutocomplete*
 #else
@@ -277,6 +314,8 @@ conversation_attach(PurpleConversation *conv)
 #endif
 		g_signal_connect(G_OBJECT(gtkchat->list), "button-release-event",
 						G_CALLBACK(button_press), gtkconv);
+		g_signal_connect(G_OBJECT(gtkconv->entry), "key-release-event",
+						G_CALLBACK(entry_key_press_cb), gtkconv);
 #ifdef SMARTTAB
 		return ac;
 #endif
@@ -289,6 +328,11 @@ conversation_attach(PurpleConversation *conv)
 static void
 conversation_detach(PurpleConversation *conv)
 {
+	char *nick = purple_conversation_get_data(conv, "tabby-last");
+	if (nick) {
+		g_free(nick);
+		purple_conversation_set_data(conv, "tabby-last", NULL);
+	}
 #ifdef SMARTTAB
 	PidginAutocomplete *ac = PURPLE_AUTOCOMPLETE_GET(conv);
 	PURPLE_AUTOCOMPLETE_SET(conv, NULL);
@@ -299,6 +343,8 @@ conversation_detach(PurpleConversation *conv)
 		PidginChatPane *gtkchat = gtkconv->u.chat;
 		g_signal_handlers_disconnect_by_func(G_OBJECT(gtkchat->list),
 						G_CALLBACK(button_press), gtkconv);
+		g_signal_handlers_disconnect_by_func(G_OBJECT(gtkconv->entry),
+						G_CALLBACK(entry_key_press_cb), gtkconv);
 	}
 }
 
